@@ -13,14 +13,16 @@ void medirTempoExecucao(const char *nomeArquivo, void (*funcao)(const char*, int
 int verificaSimbolo(const char *linha, const char *simbolo);
 void analisarComplexidade(const char *nomeArquivo, FILE *saida);
 void detectarRecursividade(const char *nomeArquivo, FILE *saida);
+void identificarTecnicasProjeto(const char *nomeArquivo, FILE *saida);  // Nova função
 
 int main(void) {
-	
-        const char *simbolos[] = {
-        "if", "else", "while", "printf", "scanf", "int", "float", "double", "long", ">=", "<=", "char", 
-		"%", "&", "int*","float*", "double*", "long*", "char*", "for", "fprintf", "fscanf", "fopen", 
-		"fclose","switch","fwrite", "fread", "fseek", "ftell", "rewind", "fflush", "remove", "rename", 
-		"case", "default", "break", "|" 
+    
+    const char *simbolos[] = {
+        "//", "/*", "*/", "=", "==", "!=", "-=", "+=", "if", "else", "while", 
+        "printf", "scanf", "int", "float", "double", "long", ">=", "<=", "char", "%", "&", "int*", 
+        "float*", "double*", "long*", "char*", "for", "fprintf", "fscanf", "fopen", "fclose","switch", 
+        "fwrite", "fread", "fseek", "ftell", "rewind", "fflush", "remove", "rename", "case", "default",
+         "break", "|"
     };
     int contadoresSimbolos[MAX_SIMBOLOS] = {0};
 
@@ -30,7 +32,7 @@ int main(void) {
     medirTempoExecucao("boubleSort.c", calcularSimples, contadoresSimbolos, simbolos, sizeof(simbolos) / sizeof(simbolos[0]));
     medirTempoExecucao("probabilidade.c", calcularSimples, contadoresSimbolos, simbolos, sizeof(simbolos) / sizeof(simbolos[0]));
 
-	printf("Processamento realizado com sucesso!");
+    printf("Processamento realizado com sucesso!");
     return 0;
 }
 
@@ -77,9 +79,9 @@ void medirTempoExecucao(const char *nomeArquivo, void (*funcao)(const char*, int
 
     fprintf(saida, "Tempo de Execucao: %lf segundos\n\n", tempoGasto);
 
-    // Análise de complexidade e recursividade
-    detectarRecursividade(nomeArquivo, saida);
-    analisarComplexidade(nomeArquivo, saida);
+    detectarRecursividade(nomeArquivo, saida);  // Detectar Recursividade
+    analisarComplexidade(nomeArquivo, saida);  // Analisar Complexidade Assintótica
+    identificarTecnicasProjeto(nomeArquivo, saida);  // Identificar as técnicas de projeto
 
     fclose(arquivo);
     fclose(saida);
@@ -113,7 +115,6 @@ void detectarRecursividade(const char *nomeArquivo, FILE *saida) {
     int dentroFuncao = 0;
     int recursividadeEncontrada = 0;
     int abriuChave = 0;  // Verifica se está dentro do corpo de uma função
-    int comentarioAtivo = 0;  // Indica se está dentro de um comentário de bloco (/* */)
 
     FILE *arquivo = fopen(nomeArquivo, "r");
     if (arquivo == NULL) {
@@ -123,65 +124,44 @@ void detectarRecursividade(const char *nomeArquivo, FILE *saida) {
 
     while (fgets(linha, MAX_LINHA, arquivo)) {
         char *ptr = linha;
-        while (isspace(*ptr)) ptr++;  // Ignorar espaços em branco
+        while (isspace(*ptr)) ptr++;
 
         // Remover comentários de linha única (//)
         char *comentarioLinha = strstr(ptr, "//");
         if (comentarioLinha) {
-            *comentarioLinha = '\0';  // Truncar a linha ao encontrar "//"
+            *comentarioLinha = '\0';
         }
 
-        // Verificar início e fim de comentários de bloco (/* */)
-        char *inicioComentarioBloco = strstr(ptr, "/*");
-        char *fimComentarioBloco = strstr(ptr, "*/");
-        if (inicioComentarioBloco && !fimComentarioBloco) {
-            comentarioAtivo = 1;
-        }
-        if (comentarioAtivo && fimComentarioBloco) {
-            comentarioAtivo = 0;
-            continue;  // Ignorar a linha enquanto está em um comentário de bloco
-        }
-        if (comentarioAtivo) {
-            continue;  // Pular linhas dentro de comentários de bloco
-        }
-
-        // Verifica se está no início de uma definição de função, exceto para a função 'main'
         if (!dentroFuncao && (strstr(ptr, "int ") == ptr || strstr(ptr, "void ") == ptr ||
             strstr(ptr, "float ") == ptr || strstr(ptr, "double ") == ptr || strstr(ptr, "char ") == ptr)) {
             
-            // Captura o nome da função
             char *inicioNome = strchr(ptr, ' ') + 1;
             char *fimNome = strchr(inicioNome, '(');
             if (fimNome) {
                 strncpy(funcaoAtual, inicioNome, fimNome - inicioNome);
                 funcaoAtual[fimNome - inicioNome] = '\0';
-                
-                // Ignora a função 'main'
+
                 if (strcmp(funcaoAtual, "main") == 0) {
-                    dentroFuncao = 0;  // Não entra no modo de análise para a função main
+                    dentroFuncao = 0;
                     continue;
                 }
 
                 dentroFuncao = 1;
                 recursividadeEncontrada = 0;
-                abriuChave = 0; // Marcar que ainda não entrou no corpo da função
+                abriuChave = 0;
             }
         }
 
-        // Verifica a abertura da chave (início do corpo da função)
         if (dentroFuncao && strchr(ptr, '{')) {
-            abriuChave = 1;  // Entrou no corpo da função
+            abriuChave = 1;
         }
 
-        // Detecta chamadas recursivas no corpo da função
         if (dentroFuncao && abriuChave && strstr(ptr, funcaoAtual) && strchr(ptr, '(')) {
-            // Verifica se é uma chamada de função e não uma declaração, comentário ou string
             if (verificaChamadaFuncao(ptr, funcaoAtual)) {
                 recursividadeEncontrada = 1;
             }
         }
 
-        // Verifica se chegou ao final da função
         if (dentroFuncao && strchr(ptr, '}')) {
             if (recursividadeEncontrada) {
                 fprintf(saida, "Recursividade detectada na função: %s\n\n", funcaoAtual);
@@ -200,22 +180,20 @@ void detectarRecursividade(const char *nomeArquivo, FILE *saida) {
 int verificaChamadaFuncao(char *linha, const char *funcao) {
     char *pos = strstr(linha, funcao);
     while (pos != NULL) {
-        // Verifica se o nome da função é seguido por '(' e precedido por algo válido (espaço, '{', ';', ou nada)
         if (*(pos + strlen(funcao)) == '(' && 
             (pos == linha || isspace(*(pos - 1)) || *(pos - 1) == ';' || *(pos - 1) == '{')) {
-            // Verifica se não está dentro de uma string (evitar strings contendo o nome da função)
             int dentroString = 0;
             char *c;
             for (c = linha; c < pos; c++) {
                 if (*c == '"') {
-                    dentroString = !dentroString;  // Inverter o estado de estar dentro ou fora de uma string
+                    dentroString = !dentroString;
                 }
             }
             if (!dentroString) {
-                return 1;  // Chamada de função válida
+                return 1;
             }
         }
-        pos = strstr(pos + 1, funcao);  // Continuar procurando outras ocorrências
+        pos = strstr(pos + 1, funcao);
     }
     return 0;
 }
@@ -308,5 +286,43 @@ void analisarComplexidade(const char *nomeArquivo, FILE *saida) {
     }
 
     fflush(saida);
+    fclose(arquivo);
+}
+
+//Função para identificar as técnicas de projeto
+void identificarTecnicasProjeto(const char *nomeArquivo, FILE *saida) {
+    FILE *arquivo = fopen(nomeArquivo, "r");
+    if (arquivo == NULL) {
+        perror("Erro ao abrir o arquivo");
+        exit(EXIT_FAILURE);
+    }
+
+    char linha[MAX_LINHA];
+    int recursao = 0, divisaoProblema = 0, tabelaMemoria = 0;
+
+    while (fgets(linha, MAX_LINHA, arquivo)) {
+        if (strstr(linha, "return") && strstr(linha, "(")) {
+            recursao = 1;
+        }
+
+        if (strstr(linha, "/2") || strstr(linha, ">>1")) {
+            divisaoProblema = 1;
+        }
+
+        if (strstr(linha, "malloc") || strstr(linha, "calloc")) {
+            tabelaMemoria = 1;
+        }
+    }
+
+    if (recursao && divisaoProblema) {
+        fprintf(saida, "Técnica de Projeto: Dividir para Conquistar\n");
+    } else if (tabelaMemoria) {
+        fprintf(saida, "Técnica de Projeto: Programação Dinâmica\n");
+    } else if (recursao) {
+        fprintf(saida, "Técnica de Projeto: Recursão Simples\n");
+    } else {
+        fprintf(saida, "Técnica de Projeto: Iterativa\n");
+    }
+
     fclose(arquivo);
 }
